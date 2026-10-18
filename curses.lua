@@ -431,23 +431,18 @@ Cursive:RegisterEvent("SPELL_MISS_SELF", function(casterGuid, targetGuid, spellI
   end
 end)
 
-Cursive:RegisterEvent("CHAT_MSG_SPELL_AURA_GONE_OTHER", function(message)
-	-- check if spell that faded is relevant
-	local _, _, spellName, target = string.find(message, fades_test)
-	if spellName and target then
-		spellName = curses:GetLowercaseSpellName(spellName)
-		if curses.trackedCurseNamesToTextures[spellName] then
-			-- loop through targets with active curses
-			for guid, data in pairs(curses.guids) do
-				for curseName, curseData in pairs(data) do
-					if curseName == spellName then
-						-- see if target still has that curse
-						if not curses:ScanGuidForCurse(guid, curseData.appliedSpellID or curseData.spellID) then
-							-- remove curse
-							curses:RemoveCurse(guid, curseName)
-						end
-					end
-				end
+-- [OctoWoW] nampower DEBUFF_REMOVED_OTHER gives the unit GUID and spell ID of the
+-- debuff that faded, so there is no need to parse every "X fades from Y" chat line
+-- in the raid and then re-check every tracked target for a curse with that name.
+Cursive:RegisterEvent("DEBUFF_REMOVED_OTHER", function(guid, luaSlot, spellID, stacks, auraLevel, auraSlot, state)
+	if state ~= 1 then return end
+	local data = curses.guids[guid]
+	if not data then return end
+	for curseName, curseData in pairs(data) do
+		if (curseData.appliedSpellID or curseData.spellID) == spellID then
+			-- another caster's copy of the same debuff may still be there
+			if not curses:ScanGuidForCurse(guid, spellID) then
+				curses:RemoveCurse(guid, curseName)
 			end
 		end
 	end
